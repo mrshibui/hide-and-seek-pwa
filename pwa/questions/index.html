@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Vragen">
+  <meta name="theme-color" content="#1F2938">
+  <title>Vragen</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="questions-data.js"></script>
+  <style>
+    :root {
+      --nav-bg:   #1F2938;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: #F4F4F6;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ── Nav bar ── */
+    .nav {
+      background: var(--nav-bg);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      padding-top: var(--safe-top);
+      height: calc(52px + var(--safe-top));
+      flex-shrink: 0;
+      position: relative;
+    }
+    .nav-title { font-size: 17px; font-weight: 600; color: white; }
+
+    /* ── Scrollable area ── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
+      padding-bottom: calc(16px + var(--safe-bot));
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Empty / error ── */
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 32px 40px;
+      gap: 12px;
+      text-align: center;
+    }
+
+    /* ── Category block ── */
+    .category-block { display: flex; flex-direction: column; gap: 10px; }
+
+    .cat-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .cat-name {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .cat-count {
+      margin-left: auto;
+      font-size: 11px;
+    }
+    .chevron {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.2s;
+    }
+    .chevron.open { transform: rotate(90deg); }
+
+    /* ── Question row ── */
+    .q-card {
+      background: white;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+      border: 1px solid rgba(0,0,0,0.06);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s;
+    }
+    .q-card:active { transform: scale(0.985); }
+    .q-card.asked { border-color: rgba(0,0,0,0.06); }
+
+    .q-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+    }
+    .q-cat-lbl {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .q-check { margin-left: auto; }
+    .q-check svg { width: 22px; height: 22px; }
+
+    .q-body {
+      padding: 12px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .q-title {
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.3;
+    }
+    .q-desc {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .q-cost {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .q-cost svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+    .cost-text { font-size: 12px; font-weight: 500; line-height: 1.4; }
+
+    .btn-ask {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      -webkit-tap-highlight-color: transparent;
+      align-self: flex-start;
+    }
+    .btn-ask svg { width: 16px; height: 16px; }
+
+    /* ── Category icon ── */
+    .cat-icon {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Overlay / Sheet ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .sheet {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      padding-bottom: calc(16px + var(--safe-bot));
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.34, 1.02, 0.64, 1);
+    }
+    .overlay.open .sheet { transform: translateY(0); }
+    .sheet-handle {
+      width: 36px; height: 4px;
+      background: #D1D1D6;
+      border-radius: 2px;
+      margin: 10px auto 0;
+      flex-shrink: 0;
+    }
+    .sheet-title {
+      font-size: 17px;
+      font-weight: 600;
+      text-align: center;
+      padding: 18px 16px 12px;
+      color: #1A1A1A;
+      flex-shrink: 0;
+    }
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px;
+    }
+    .sheet-footer {
+      padding: 12px 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .btn-row { display: flex; gap: 12px; }
+    .full-btn {
+      flex: 1;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-cancel { background: #F2F2F2; color: #4A4A4A; }
+
+    /* ── Question confirmation preview ── */
+    .q-preview {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.07);
+      margin-bottom: 4px;
+    }
+    .q-preview-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+    }
+    .q-preview-body { padding: 0 20px 20px; }
+    .q-preview-desc { font-size: 15px; color: #3F3F3F; line-height: 1.55; }
+    .q-preview-cost {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .q-preview-cost svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+    .cost-label { font-size: 11px; font-weight: 600; color: #666; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .cost-val { font-size: 14px; font-weight: 500; line-height: 1.4; }
+    .cost-asked { font-size: 12px; font-style: italic; color: #D94A3D; }
+    .q-meta { display: flex; flex-direction: column; gap: 2px; }
+    .q-meta-cat { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+    .q-meta-title { font-size: 20px; font-weight: 700; text-transform: uppercase; line-height: 1.2; color: #1A1A1A; }
+  </style>
+</head>
+<body>
+
+<div class="nav">
+  <span class="nav-title">Vragen</span>
+</div>
+
+<div class="main" id="main-area">
+  <div class="empty"><p style="color:#888">Laden…</p></div>
+</div>
+
+<!-- Ask confirmation sheet -->
+<div class="overlay" id="overlay-ask" onclick="closeAskIfOutside(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Stel deze vraag?</div>
+    <div class="sheet-body" id="ask-sheet-body"></div>
+    <div class="sheet-footer">
+      <div class="btn-row">
+        <button class="full-btn btn-cancel" onclick="closeAskSheet()">Annuleren</button>
+        <button class="full-btn" id="btn-confirm-ask" onclick="confirmAsk()">Stel vraag</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Category config ────────────────────────────────────
+const CAT_CONFIG = {
+  Matching:    { color: '#2E6BD1', bg: '#E1EDFB', light: 'rgba(46,107,209,0.12)'  },
+  Measuring:   { color: '#8530BF', bg: '#F0E5FB', light: 'rgba(133,48,191,0.12)'  },
+  Thermometer: { color: '#CC2E2E', bg: '#FAE5E5', light: 'rgba(204,46,46,0.12)'   },
+  Radar:       { color: '#1A9A9E', bg: '#DBF4F5', light: 'rgba(26,154,158,0.12)'  },
+  Tentacles:   { color: '#2EA647', bg: '#E0F7E6', light: 'rgba(46,166,71,0.12)'   },
+  Photos:      { color: '#E08A0E', bg: '#FDF2D6', light: 'rgba(224,138,14,0.12)'  },
+};
+function catConf(name) {
+  return CAT_CONFIG[name] || { color: '#888', bg: '#F2F2F2', light: 'rgba(136,136,136,0.12)' };
+}
+
+// ── Category SVG icons (24×24 viewBox) ─────────────────
+function catIconSVG(icon, size, color) {
+  const sw = Math.max(1.5, size * 0.55 / 12);
+  const icons = {
+    matching: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="7" y1="9"  x2="17" y2="9"/>
+      <line x1="7" y1="12" x2="17" y2="12"/>
+      <line x1="7" y1="15" x2="13" y2="15"/>
+    </svg>`,
+    measuring: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12h2l2-4 3 8 2-4h2l2-4 2 4h3"/>
+    </svg>`,
+    thermometer: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}">
+      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+    </svg>`,
+    radar: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+      <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+      <circle cx="12" cy="20" r="1" fill="${color}"/>
+    </svg>`,
+    tentacles: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round">
+      <circle cx="12" cy="12" r="2" fill="${color}"/>
+      <line x1="12" y1="10" x2="12" y2="4"/>
+      <line x1="12" y1="14" x2="12" y2="20"/>
+      <line x1="14" y1="11" x2="20" y2="8"/>
+      <line x1="10" y1="13" x2="4"  y2="16"/>
+      <line x1="14" y1="13" x2="20" y2="16"/>
+      <line x1="10" y1="11" x2="4"  y2="8"/>
+    </svg>`,
+    photos: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>`,
+  };
+  return icons[icon] || icons['photos'];
+}
+
+function catIconHTML(icon, name, size) {
+  const { color, light } = catConf(name);
+  return `<div class="cat-icon" style="width:${size}px;height:${size}px;background:${light}">${catIconSVG(icon, size * 0.6, color)}</div>`;
+}
+
+// ── Exclamation icon ───────────────────────────────────
+function exclamIcon(color, size = 14) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}">
+    <circle cx="12" cy="12" r="11"/>
+    <line x1="12" y1="7" x2="12" y2="13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="12" cy="17" r="1.5" fill="white"/>
+  </svg>`;
+}
+
+// ── HTML escape ────────────────────────────────────────
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── UUID ───────────────────────────────────────────────
+function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+}
+
+// ── State ──────────────────────────────────────────────
+// categories: [{ name, icon, expanded, questions: [{ id, title, description, cost, asked }] }]
+const S = {
+  categories: [],
+  questionToAsk: null,
+};
+
+// ── Load data ──────────────────────────────────────────
+function init() {
+  S.categories = QUESTIONS_DATA.map(cat => ({
+    name: cat.name,
+    icon: cat.icon,
+    expanded: true,
+    questions: cat.questions.map(q => ({
+      id: uid(),
+      title: q.title,
+      description: q.description,
+      cost: q.cost || '',
+      asked: false,
+    })),
+  }));
+  render();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+// ── Toggle category ────────────────────────────────────
+function toggleCategory(name) {
+  const cat = S.categories.find(c => c.name === name);
+  if (cat) { cat.expanded = !cat.expanded; render(); }
+}
+
+// ── Ask question ───────────────────────────────────────
+function askQuestion(catName, qId) {
+  for (const cat of S.categories) {
+    const q = cat.questions.find(q => q.id === qId);
+    if (q) { q.asked = true; break; }
+  }
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────
+function render() {
+  const area = document.getElementById('main-area');
+  if (S.categories.length === 0) {
+    area.innerHTML = '<div class="empty"><p>Geen vragen gevonden.</p></div>';
+    return;
+  }
+  area.innerHTML = S.categories.map(cat => renderCategory(cat)).join('');
+}
+
+function renderCategory(cat) {
+  const { color, bg, light } = catConf(cat.name);
+  const chevronClass = cat.expanded ? 'chevron open' : 'chevron';
+  const chevronSVG = `<svg class="${chevronClass}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round">
+    <polyline points="9,18 15,12 9,6"/>
+  </svg>`;
+
+  const questionsHTML = cat.expanded
+    ? cat.questions.map(q => renderQuestion(q, cat.icon, cat.name)).join('')
+    : '';
+
+  return `<div class="category-block">
+    <div class="cat-header" style="background:${light};border-color:${color}40"
+         onclick='toggleCategory(${JSON.stringify(cat.name)})'>
+      ${catIconHTML(cat.icon, cat.name, 32)}
+      <span class="cat-name" style="color:${color}">${esc(cat.name)}</span>
+      <span class="cat-count" style="color:${color}99">${cat.questions.length}</span>
+      ${chevronSVG}
+    </div>
+    ${questionsHTML}
+  </div>`;
+}
+
+function renderQuestion(q, icon, catName) {
+  const { color, bg, light } = catConf(catName);
+  const effectColor = q.asked ? '#888' : color;
+  const effectBg    = q.asked ? '#F2F2F2' : bg;
+  const effectLight = q.asked ? 'rgba(136,136,136,0.12)' : light;
+
+  const checkHTML = q.asked
+    ? `<span class="q-check"><svg viewBox="0 0 24 24" fill="#888">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22,4 12,14.01 9,11.01" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg></span>` : '';
+
+  const displayCost = q.asked && q.cost ? `${esc(q.cost)} (2×)` : esc(q.cost);
+  const costHTML = q.cost ? `
+    <div class="q-cost">
+      ${exclamIcon(effectColor)}
+      <span class="cost-text" style="color:${effectColor}">${displayCost}</span>
+    </div>` : '';
+
+  const askBtnHTML = !q.asked ? `
+    <button class="btn-ask" style="background:${color}"
+            onclick='event.stopPropagation();openAskSheet(${JSON.stringify(catName)},${JSON.stringify(q.id)})'>
+      <svg viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+      Stel vraag
+    </button>` : '';
+
+  return `<div class="q-card${q.asked ? ' asked' : ''}" style="background:${effectBg}"
+              onclick='openAskSheet(${JSON.stringify(catName)},${JSON.stringify(q.id)})'>
+    <div class="q-header" style="background:${effectLight}">
+      ${catIconHTML(icon, catName, 32)}
+      <span class="q-cat-lbl" style="color:${effectColor}">${esc(catName)}</span>
+      ${checkHTML}
+    </div>
+    <div class="q-body">
+      <div class="q-title" style="color:${q.asked ? '#808080' : '#1A1A1A'}">${esc(q.title)}</div>
+      <div class="q-desc" style="color:${q.asked ? '#999' : '#4D4D4D'}">${esc(q.description)}</div>
+      ${costHTML}
+      ${askBtnHTML}
+    </div>
+  </div>`;
+}
+
+// ── Ask sheet ──────────────────────────────────────────
+function openAskSheet(catName, qId) {
+  let found = null;
+  for (const cat of S.categories) {
+    const q = cat.questions.find(q => q.id === qId);
+    if (q) { found = { q, catName, icon: cat.icon }; break; }
+  }
+  if (!found) return;
+  S.questionToAsk = found;
+
+  const { q, icon } = found;
+  const { color, bg, light } = catConf(catName);
+  const displayCost = q.asked && q.cost ? `${esc(q.cost)} (2×)` : esc(q.cost);
+  const alreadyAsked = q.asked
+    ? `<span class="cost-asked"> (al gesteld)</span>` : '';
+
+  const costHTML = q.cost ? `
+    <div class="q-preview-cost">
+      ${exclamIcon(color, 16)}
+      <div>
+        <div class="cost-label">Kosten</div>
+        <div class="cost-val" style="color:${color}">${displayCost}${alreadyAsked}</div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('ask-sheet-body').innerHTML = `
+    <div class="q-preview" style="background:${bg};border-color:${color}33">
+      <div class="q-preview-header" style="background:${light}">
+        ${catIconHTML(icon, catName, 44)}
+        <div class="q-meta">
+          <span class="q-meta-cat" style="color:${color}">${esc(catName)}</span>
+          <span class="q-meta-title">${esc(q.title)}</span>
+        </div>
+      </div>
+      <div class="q-preview-body">
+        <p class="q-preview-desc">${esc(q.description)}</p>
+        ${costHTML}
+      </div>
+    </div>`;
+
+  const askBtn = document.getElementById('btn-confirm-ask');
+  askBtn.style.background = color;
+  askBtn.style.color = 'white';
+  document.getElementById('overlay-ask').classList.add('open');
+}
+
+function closeAskSheet() {
+  document.getElementById('overlay-ask').classList.remove('open');
+  S.questionToAsk = null;
+}
+function closeAskIfOutside(e) {
+  if (e.target === document.getElementById('overlay-ask')) closeAskSheet();
+}
+function confirmAsk() {
+  if (S.questionToAsk) {
+    askQuestion(S.questionToAsk.catName, S.questionToAsk.q.id);
+  }
+  closeAskSheet();
+}
+
+init();
+</script>
+</body>
+</html>

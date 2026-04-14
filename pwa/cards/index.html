@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Kaartenstapel">
+  <meta name="theme-color" content="#1F2938">
+  <title>Kaartenstapel</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="cards-data.js"></script>
+  <style>
+    :root {
+      --bonus:    #D9A600;  --bonus-bg:  #FFF8D9;  --bonus-light:  rgba(217,166,0,0.12);
+      --powerup:  #2EA647;  --powerup-bg:#E0F7E6;  --powerup-light:rgba(46,166,71,0.12);
+      --vloek:    #CC2E2E;  --vloek-bg:  #FAE5E5;  --vloek-light:  rgba(204,46,46,0.12);
+      --gray:     #888888;  --gray-bg:   #F2F2F2;  --gray-light:   rgba(136,136,136,0.12);
+      --nav-bg:   #1F2938;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: #F4F4F6;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ── Nav bar ── */
+    .nav {
+      background: var(--nav-bg);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      padding-top: var(--safe-top);
+      height: calc(52px + var(--safe-top));
+      flex-shrink: 0;
+    }
+    .nav-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: white;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: var(--safe-top);
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: #5B9EF5;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 6px 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-btn:disabled { color: rgba(91,158,245,0.4); cursor: default; }
+    .nav-btn svg { width: 18px; height: 18px; }
+    .nav-spacer { width: 60px; }
+
+    /* ── Stats bar ── */
+    .stats {
+      background: var(--nav-bg);
+      display: flex;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .stat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 4px;
+      gap: 3px;
+    }
+    .stat + .stat { border-left: 1px solid rgba(255,255,255,0.12); }
+    .stat-num {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .stat-lbl {
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+    }
+    .stat-deck  .stat-num { color: #8AB4D4; }
+    .stat-hand  .stat-num { color: var(--powerup); }
+    .stat-grave .stat-num { color: var(--vloek); }
+
+    /* ── Scrollable main area ── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── Empty state ── */
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 32px 40px;
+      gap: 12px;
+      text-align: center;
+    }
+    .empty svg { width: 56px; height: 56px; color: #BCBCBC; }
+    .empty-title { font-size: 18px; color: #4A4A4A; font-weight: 500; }
+    .empty-sub   { font-size: 14px; color: #888; }
+
+    /* ── Card ── */
+    .card {
+      background: white;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+      border: 1px solid rgba(0,0,0,0.06);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s;
+    }
+    .card:active { transform: scale(0.985); }
+    .card.selected { border-width: 2px; }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+    }
+    .cat-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .check-icon { margin-left: auto; }
+    .check-icon svg { width: 22px; height: 22px; }
+
+    .card-body {
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      line-height: 1.3;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: #4D4D4D;
+      line-height: 1.5;
+    }
+    .card-cost {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .card-cost svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+    .cost-text { font-size: 12px; font-weight: 500; line-height: 1.4; }
+
+    .card-actions {
+      display: flex;
+      gap: 10px;
+      padding-top: 4px;
+    }
+    .btn-play, .btn-discard {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-play { color: white; }
+    .btn-discard {
+      background: #EDEDED;
+      color: #666;
+    }
+    .btn-play svg, .btn-discard svg { width: 16px; height: 16px; }
+
+    /* ── List wrapper ── */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      padding-bottom: calc(16px + var(--safe-bot));
+    }
+
+    /* ── Drawn cards header ── */
+    .drawn-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px 8px;
+    }
+    .drawn-header-title { font-size: 15px; font-weight: 600; color: #1A1A1A; }
+    .drawn-header-count { font-size: 13px; color: #888; }
+
+    .keep-btn {
+      margin: 0 16px;
+      margin-bottom: calc(16px + var(--safe-bot));
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .keep-btn:disabled { background: #ADADAD !important; cursor: default; }
+
+    /* ── Category icon ── */
+    .cat-icon {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .cat-icon svg { display: block; }
+
+    /* ── Overlay / Modal ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .sheet {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      padding-bottom: calc(16px + var(--safe-bot));
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.34, 1.02, 0.64, 1);
+    }
+    .overlay.open .sheet {
+      transform: translateY(0);
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: #D1D1D6;
+      border-radius: 2px;
+      margin: 10px auto 0;
+      flex-shrink: 0;
+    }
+    .sheet-title {
+      font-size: 17px;
+      font-weight: 600;
+      text-align: center;
+      padding: 18px 16px 12px;
+      color: #1A1A1A;
+      flex-shrink: 0;
+    }
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px;
+    }
+    .sheet-footer {
+      padding: 12px 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .sheet-footer .btn-row { display: flex; gap: 12px; }
+
+    /* ── Draw sheet segmented control ── */
+    .seg-ctrl {
+      display: flex;
+      background: #E9E9EB;
+      border-radius: 9px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+      color: #1A1A1A;
+    }
+    .seg-btn.active {
+      background: white;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      font-weight: 600;
+    }
+
+    /* ── Full-width action button ── */
+    .full-btn {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-primary { background: var(--nav-bg); color: white; }
+    .btn-outline {
+      background: #F2F2F2;
+      color: var(--nav-bg);
+      border: 1.5px solid var(--nav-bg);
+    }
+    .btn-cancel {
+      background: #F2F2F2;
+      color: #4A4A4A;
+      border: none;
+    }
+
+    /* ── Play sheet card preview ── */
+    .play-preview {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.07);
+      margin-bottom: 4px;
+    }
+    .play-preview-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+    }
+    .play-preview-body { padding: 0 20px 20px; }
+    .play-preview-desc { font-size: 15px; color: #3F3F3F; line-height: 1.55; }
+    .play-preview-cost {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .play-preview-cost svg { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; }
+    .cost-label { font-size: 11px; font-weight: 600; color: #666; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .cost-val { font-size: 14px; font-weight: 500; line-height: 1.4; }
+
+    .play-meta { display: flex; flex-direction: column; gap: 2px; }
+    .play-cat-lbl { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+    .play-card-title { font-size: 20px; font-weight: 700; text-transform: uppercase; line-height: 1.2; color: #1A1A1A; }
+  </style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-spacer"></div>
+  <span class="nav-title">Kaartenstapel</span>
+  <button class="nav-btn" id="btn-draw-open" onclick="openDrawSheet()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <rect x="2" y="5" width="20" height="14" rx="2"/>
+      <path d="M12 9v6M9 12h6"/>
+    </svg>
+    Trek
+  </button>
+</div>
+
+<div class="stats">
+  <div class="stat stat-deck">
+    <span class="stat-num" id="stat-deck">0</span>
+    <span class="stat-lbl">Stapel</span>
+  </div>
+  <div class="stat stat-hand">
+    <span class="stat-num" id="stat-hand">0</span>
+    <span class="stat-lbl">Hand</span>
+  </div>
+  <div class="stat stat-grave">
+    <span class="stat-num" id="stat-grave">0</span>
+    <span class="stat-lbl">Afgelegd</span>
+  </div>
+</div>
+
+<div class="main" id="main-area"></div>
+
+<!-- Draw sheet -->
+<div class="overlay" id="overlay-draw" onclick="closeDrawIfOutside(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Kaarten trekken</div>
+    <div class="sheet-body" style="padding-bottom:16px;">
+      <p style="text-align:center;color:#555;font-size:15px;margin-bottom:18px;">Hoeveel kaarten?</p>
+      <div class="seg-ctrl" id="seg-ctrl">
+        <button class="seg-btn active" data-val="1" onclick="setDrawCount(1)">1</button>
+        <button class="seg-btn"        data-val="2" onclick="setDrawCount(2)">2</button>
+        <button class="seg-btn"        data-val="3" onclick="setDrawCount(3)">3</button>
+        <button class="seg-btn"        data-val="4" onclick="setDrawCount(4)">4</button>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="full-btn btn-primary" onclick="confirmDraw()">Trek kaarten</button>
+      <button class="full-btn btn-cancel" onclick="closeDrawSheet()">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Play confirmation sheet -->
+<div class="overlay" id="overlay-play" onclick="closePlayIfOutside(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Kaart spelen?</div>
+    <div class="sheet-body" id="play-sheet-body"></div>
+    <div class="sheet-footer">
+      <div class="btn-row">
+        <button class="full-btn btn-cancel" onclick="closePlaySheet()">Annuleren</button>
+        <button class="full-btn btn-primary" id="btn-confirm-play" onclick="confirmPlay()">Speel kaart</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────
+const S = {
+  deck: [],
+  hand: [],
+  graveyard: [],
+  drawn: [],
+  selected: new Set(),   // ids of selected drawn cards
+  drawCount: 1,
+  cardToPlay: null,      // card object pending play confirmation
+};
+
+// ── Colour helpers ─────────────────────────────────────
+function catColor(cat) {
+  return { Bonus:'#D9A600', Powerup:'#2EA647', Vloek:'#CC2E2E' }[cat] || '#888888';
+}
+function catBg(cat) {
+  return { Bonus:'#FFF8D9', Powerup:'#E0F7E6', Vloek:'#FAE5E5' }[cat] || '#F2F2F2';
+}
+function catLightBg(cat) {
+  return { Bonus:'rgba(217,166,0,0.12)', Powerup:'rgba(46,166,71,0.12)', Vloek:'rgba(204,46,46,0.12)' }[cat] || 'rgba(136,136,136,0.12)';
+}
+
+// ── SVG icons ──────────────────────────────────────────
+function iconSVG(cat, size, color) {
+  const s = size / 24;
+  if (cat === 'Bonus') {
+    // Clock
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${size/12/size*24}" stroke-linecap="round">
+      <circle cx="12" cy="12" r="11"/>
+      <line x1="12" y1="5" x2="12" y2="12"/>
+      <line x1="12" y1="12" x2="17" y2="14.5"/>
+    </svg>`;
+  }
+  if (cat === 'Powerup') {
+    // Lightning bolt (filled)
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="none">
+      <polygon points="13,1 5,14 11,14 11,23 19,10 13,10"/>
+    </svg>`;
+  }
+  if (cat === 'Vloek') {
+    // Magic wand + sparkles
+    const sw = Math.max(1.5, size / 12);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="14" y1="7"  x2="20.08" y2="3.75"/>
+      <line x1="19.52" y1="3.31" x2="6.53" y2="20.13"/>
+      <line x1="5"  y1="7"  x2="5"  y2="11"/>
+      <line x1="3"  y1="9"  x2="7"  y2="9"/>
+      <line x1="8"  y1="4"  x2="8"  y2="6"/>
+      <line x1="7"  y1="5"  x2="9"  y2="5"/>
+      <line x1="16" y1="18" x2="16" y2="20"/>
+      <line x1="15" y1="19" x2="17" y2="19"/>
+    </svg>`;
+  }
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" font-size="14" fill="${color}">?</text></svg>`;
+}
+
+function catIconHTML(cat, size) {
+  const color = catColor(cat);
+  const light = catLightBg(cat);
+  return `<div class="cat-icon" style="width:${size}px;height:${size}px;background:${light};">${iconSVG(cat, size * 0.6, color)}</div>`;
+}
+
+// ── Exclamation icon ───────────────────────────────────
+function exclamIcon(color, size = 14) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}">
+    <circle cx="12" cy="12" r="11"/>
+    <line x1="12" y1="7" x2="12" y2="13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="12" cy="17" r="1.5" fill="white"/>
+  </svg>`;
+}
+
+// ── UUID ───────────────────────────────────────────────
+function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+}
+
+// ── Shuffle ────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ── Load data ──────────────────────────────────────────
+function init() {
+  S.deck = shuffle(CARDS_DATA.map(d => ({ ...d, id: uid() })));
+  render();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+// ── Game actions ───────────────────────────────────────
+function drawCards(count) {
+  if (S.drawn.length > 0) {
+    S.graveyard.push(...S.drawn);
+    S.drawn = [];
+  }
+  if (S.deck.length === 0 && S.graveyard.length > 0) {
+    S.deck = shuffle([...S.graveyard]);
+    S.graveyard = [];
+  }
+  const n = Math.min(count, S.deck.length);
+  S.drawn = S.deck.splice(0, n);
+  S.selected.clear();
+  render();
+}
+
+function toggleSelect(id) {
+  if (S.selected.has(id)) S.selected.delete(id);
+  else S.selected.add(id);
+  render();
+}
+
+function keepSelected() {
+  for (const card of S.drawn) {
+    if (S.selected.has(card.id)) S.hand.push(card);
+    else S.graveyard.push(card);
+  }
+  S.drawn = [];
+  S.selected.clear();
+  render();
+}
+
+function playCard(card) {
+  S.hand = S.hand.filter(c => c.id !== card.id);
+  S.graveyard.push(card);
+  render();
+}
+
+function discardCard(card) {
+  S.hand = S.hand.filter(c => c.id !== card.id);
+  S.graveyard.push(card);
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────
+function render() {
+  // Stats
+  document.getElementById('stat-deck').textContent  = S.deck.length;
+  document.getElementById('stat-hand').textContent  = S.hand.length;
+  document.getElementById('stat-grave').textContent = S.graveyard.length;
+
+  // Draw button
+  const drawBtn = document.getElementById('btn-draw-open');
+  drawBtn.disabled = S.deck.length === 0 && S.graveyard.length === 0;
+
+  // Main area
+  const area = document.getElementById('main-area');
+  if (S.drawn.length > 0) {
+    area.innerHTML = renderDrawnView();
+  } else {
+    area.innerHTML = renderHandView();
+  }
+}
+
+function renderHandView() {
+  if (S.hand.length === 0) {
+    return `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+      </svg>
+      <span class="empty-title">Je hand is leeg</span>
+      <span class="empty-sub">Tik op 'Trek' om kaarten te trekken</span>
+    </div>`;
+  }
+  const cards = S.hand.map(card => renderHandCard(card)).join('');
+  return `<div class="card-list">${cards}</div>`;
+}
+
+function renderHandCard(card) {
+  const color = catColor(card.category);
+  const bg    = catBg(card.category);
+  const light = catLightBg(card.category);
+  const costHTML = card.cost ? `
+    <div class="card-cost">
+      ${exclamIcon(color)}
+      <span class="cost-text" style="color:${color}">${esc(card.cost)}</span>
+    </div>` : '';
+  return `<div class="card" style="background:${bg}">
+    <div class="card-header" style="background:${light}">
+      ${catIconHTML(card.category, 32)}
+      <span class="cat-label" style="color:${color}">${esc(card.category)}</span>
+    </div>
+    <div class="card-body">
+      <div class="card-title">${esc(card.title)}</div>
+      <div class="card-desc">${esc(card.description)}</div>
+      ${costHTML}
+      <div class="card-actions">
+        <button class="btn-play" style="background:${color}" onclick='openPlaySheet(${JSON.stringify(card.id)})'>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+          Speel
+        </button>
+        <button class="btn-discard" onclick='doDiscard(${JSON.stringify(card.id)})'>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
+            <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/>
+          </svg>
+          Leg weg
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDrawnView() {
+  const selCount = S.selected.size;
+  const cards = S.drawn.map(card => {
+    const isSelected = S.selected.has(card.id);
+    const color  = catColor(card.category);
+    const bg     = isSelected ? catLightBg(card.category) : catBg(card.category);
+    const border = isSelected ? `border-color:${color};border-width:2px;` : `border-color:${color}33;`;
+    const light  = catLightBg(card.category);
+    const checkHTML = isSelected ? `<span class="check-icon"><svg viewBox="0 0 24 24" fill="${color}"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg></span>` : '';
+    const costHTML = card.cost ? `
+      <div class="card-cost">
+        ${exclamIcon(color)}
+        <span class="cost-text" style="color:${color}">${esc(card.cost)}</span>
+      </div>` : '';
+    return `<div class="card selected" style="background:${bg};${border}" onclick='toggleSelect(${JSON.stringify(card.id)})'>
+      <div class="card-header" style="background:${light}">
+        ${catIconHTML(card.category, 32)}
+        <span class="cat-label" style="color:${color}">${esc(card.category)}</span>
+        ${checkHTML}
+      </div>
+      <div class="card-body">
+        <div class="card-title">${esc(card.title)}</div>
+        <div class="card-desc">${esc(card.description)}</div>
+        ${costHTML}
+      </div>
+    </div>`;
+  }).join('');
+
+  const btnColor = selCount === 0 ? '#ADADAD' : 'var(--nav-bg)';
+  return `
+    <div class="drawn-header">
+      <span class="drawn-header-title">Kies kaarten om te houden</span>
+      <span class="drawn-header-count">${selCount} geselecteerd</span>
+    </div>
+    <div class="card-list" style="padding-bottom:12px">${cards}</div>
+    <button class="keep-btn" style="background:${btnColor}" onclick="keepSelected()" ${selCount === 0 ? 'disabled' : ''}>
+      Bewaar geselecteerde kaarten
+    </button>`;
+}
+
+// ── Draw sheet ─────────────────────────────────────────
+function openDrawSheet() {
+  document.getElementById('overlay-draw').classList.add('open');
+}
+function closeDrawSheet() {
+  document.getElementById('overlay-draw').classList.remove('open');
+}
+function closeDrawIfOutside(e) {
+  if (e.target === document.getElementById('overlay-draw')) closeDrawSheet();
+}
+function setDrawCount(n) {
+  S.drawCount = n;
+  document.querySelectorAll('.seg-btn').forEach(b => {
+    b.classList.toggle('active', +b.dataset.val === n);
+  });
+}
+function confirmDraw() {
+  closeDrawSheet();
+  drawCards(S.drawCount);
+}
+
+// ── Play sheet ─────────────────────────────────────────
+function openPlaySheet(cardId) {
+  S.cardToPlay = S.hand.find(c => c.id === cardId) || null;
+  if (!S.cardToPlay) return;
+  const card  = S.cardToPlay;
+  const color = catColor(card.category);
+  const bg    = catBg(card.category);
+  const light = catLightBg(card.category);
+  const costHTML = card.cost ? `
+    <div class="play-preview-cost">
+      ${exclamIcon(color, 16)}
+      <div>
+        <div class="cost-label">Voorwaarde</div>
+        <div class="cost-val" style="color:${color}">${esc(card.cost)}</div>
+      </div>
+    </div>` : '';
+  document.getElementById('play-sheet-body').innerHTML = `
+    <div class="play-preview" style="background:${bg};border-color:${color}33">
+      <div class="play-preview-header" style="background:${light}">
+        ${catIconHTML(card.category, 44)}
+        <div class="play-meta">
+          <span class="play-cat-lbl" style="color:${color}">${esc(card.category)}</span>
+          <span class="play-card-title">${esc(card.title)}</span>
+        </div>
+      </div>
+      <div class="play-preview-body">
+        <p class="play-preview-desc">${esc(card.description)}</p>
+        ${costHTML}
+      </div>
+    </div>`;
+  const playBtn = document.getElementById('btn-confirm-play');
+  playBtn.style.background = color;
+  document.getElementById('overlay-play').classList.add('open');
+}
+function closePlaySheet() {
+  document.getElementById('overlay-play').classList.remove('open');
+  S.cardToPlay = null;
+}
+function closePlayIfOutside(e) {
+  if (e.target === document.getElementById('overlay-play')) closePlaySheet();
+}
+function confirmPlay() {
+  if (S.cardToPlay) playCard(S.cardToPlay);
+  closePlaySheet();
+}
+
+// ── Discard helper (called from inline onclick) ────────
+function doDiscard(cardId) {
+  const card = S.hand.find(c => c.id === cardId);
+  if (card) discardCard(card);
+}
+
+// ── HTML escape ────────────────────────────────────────
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+</body>
+</html>
